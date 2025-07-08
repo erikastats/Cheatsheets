@@ -1,0 +1,264 @@
+---
+title: "data.table"
+author: "Erika Borelli"
+format: html
+editor: visual
+---
+
+## About the data
+
+In this tutorial we are going to work with the 'ames' data from the modeldata package
+
+```{r}
+library(dplyr)
+library(data.table)
+
+ames <- modeldata::ames |>
+  janitor::clean_names() |>
+  as_tibble()
+
+dt_ames <-  as.data.table(ames)
+```
+
+### dply x data.table
+
+dplyr use a lot of functions or verbs (as they also call them) that on chain to get a specific result . The nice thing about this is that the name of this functions are usually something that is also understandable even to non programmers. This makes the code easy to understand, but it makes the code quite long and quite fast.
+
+data.table use a super concise sintexe with lots of abbreviations, this is very nice when you want a very short code, but you also feel lost when you don't know the abbreviation.
+
+$$
+df[i,j,by]
+$$
+
+i - rows that you want to modify
+
+j - columns that you want to modify
+
+by - grouping that you want to use
+
+## arrange/sort
+
+in dplyr
+
+```{r}
+ames |> 
+  arrange(desc(lot_frontage))
+```
+
+in data.table
+
+```{r}
+dt_ames[order(-lot_frontage)]
+```
+
+## filter
+
+in dplyr
+
+```{r}
+ames |>
+  filter(sale_price > 300000)
+```
+
+in data.table
+
+```{r}
+dt_ames[sale_price > 300000]
+```
+
+## select and filter
+
+in dplyr
+
+```{r}
+ames |>
+  filter(sale_price >30000) |>
+  select(neighborhood, sale_price, lot_area)
+```
+
+in data.table
+
+```{r}
+dt_ames[sale_price > 30000,
+        list(neighborhood, sale_price, lot_area)]
+
+dt_ames[sale_price > 30000,
+        .(neighborhood, sale_price, lot_area)]
+```
+
+## select with criterea
+
+in dplyr
+
+```{r}
+ames |>
+  select(contains('area'))
+
+ames |>
+  select(where(is.numeric))
+```
+
+in data.table
+
+```{r}
+dt_ames[, .SD, .SDcols = patterns('area')]
+
+df_ames[, .SD, .SDcols = is.numeric]
+```
+
+SD stands for subset of data. If you want to have only a selection of data you'll have to specify the .SD
+
+## Defyning new columns
+
+in dplyr
+
+```{r}
+df_ames |>
+  mutate(
+    price_by_lot_area = sale_price / lot_area
+  )
+```
+
+in data.table
+
+```{r}
+dt_ames[, .(price_by_lot_area = sale_price / lot_area)]
+#or
+dt_ames[, price_by_lot_area := sale_price / lot_area] # you don't need to save the object again
+```
+
+## More than one column
+
+in dplyr
+
+```{r}
+ames |>
+  mutate(
+    price_by_lot_area = sale_price / lot_area,
+    log_sale_price = log(sale_price),
+    log_pricec_by_lot_area = log_sale_price / lot_area
+  )
+```
+
+in data.table
+
+```{r}
+dt_ames[
+  , .(
+    log_sale_price = log(sale_price),
+    log_price_by_lot_area = log(sale_price) / lot_area
+  )
+]
+
+dt_ames[,
+        `:=`(price_by_lot_area = sale_price / lot_area,
+             log_sale_price = log(sale_price),
+              log_price_by_lot_area = log(sale_price) / lot_area
+             
+             )]
+
+dt_ames[,
+        let(price_by_lot_area = sale_price / lot_area,
+             log_sale_price = log(sale_price),
+              log_price_by_lot_area = log(sale_price) / lot_area
+             
+             )]
+```
+
+you can't reuse columns that you just created in data.table
+
+## Chaining
+
+in dplyr
+
+in data.table
+
+```{r}
+dt_ames[
+  , .(lot_area,
+    log_sale_price = log(sale_price)
+  )
+][, .(log_price_by_lot_area = log_sale_price / lot_area)]
+
+dt_ames[
+  , .(lot_area,
+    log_sale_price = log(sale_price)
+  )
+] |>
+  _[, .(log_price_by_lot_area = log_sale_price / lot_area)]
+
+```
+
+### Summarize columns
+
+in dyplyr
+
+```{r}
+ames |>
+  summarise(mean_sale_price = mean(sale_price),
+            n_houses = n())
+```
+
+in data.table
+
+```{r}
+dt_ames[
+  sale_price > 30000,
+  .(
+    mean_sale_price = mean(sale_price),
+    n_houses  = .N
+  )
+]
+```
+
+## Grouping
+
+in dplyr
+
+```{r}
+ames |>
+  summarise(mean_sale_price = mean(sale_price),
+            .by = neighborhood)
+```
+
+in data.table
+
+```{r}
+dt_ames[,
+        .( mean_sale_price = mean(sale_price)), 
+        by = neighborhood]
+```
+
+## Grouping multiple columns
+
+in dplyr
+
+```{r}
+ames |>
+  summarise(
+    across(
+      .cols = where(is.numeric),
+      .fns = mean
+    ),
+    n_houses = n(),
+    .by = neighborhood
+  )
+```
+
+in data.table
+
+```{r}
+dt_ames[,
+        c(lapply(.SD, mean),
+          n_houses = .N),
+        by = neighborhood,
+        .SDcols = is.numeric
+        ]
+
+dt_ames[,
+        c( purrr::map(.SD, mean),
+           n_houses = .N),
+         by = neighborhood,
+        .SDcols = patterns('area')
+        ]
+```
